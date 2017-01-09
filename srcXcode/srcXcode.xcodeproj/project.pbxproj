@@ -10,6 +10,9 @@
 		AC670F6F1E2167E600860E37 /* Bot.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F6D1E2167E600860E37 /* Bot.cpp */; settings = {ASSET_TAGS = (); }; };
 		AC670F741E2168CB00860E37 /* MyBot.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F721E2168CB00860E37 /* MyBot.cpp */; settings = {ASSET_TAGS = (); }; };
 		AC670F781E216A0A00860E37 /* State.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F761E216A0A00860E37 /* State.cpp */; settings = {ASSET_TAGS = (); }; };
+		AC670F7B1E2181A400860E37 /* Square.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F7A1E2181A400860E37 /* Square.cpp */; settings = {ASSET_TAGS = (); }; };
+		AC670F7E1E218E3000860E37 /* Route.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F7C1E218E3000860E37 /* Route.cpp */; settings = {ASSET_TAGS = (); }; };
+		AC670F801E2313CC00860E37 /* Location.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AC670F7F1E2313CC00860E37 /* Location.cpp */; settings = {ASSET_TAGS = (); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -36,6 +39,10 @@
 		AC670F761E216A0A00860E37 /* State.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = State.cpp; sourceTree = "<group>"; };
 		AC670F771E216A0A00860E37 /* State.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = State.hpp; sourceTree = "<group>"; };
 		AC670F791E216A5500860E37 /* Timer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Timer.h; sourceTree = "<group>"; };
+		AC670F7A1E2181A400860E37 /* Square.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Square.cpp; sourceTree = "<group>"; };
+		AC670F7C1E218E3000860E37 /* Route.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Route.cpp; sourceTree = "<group>"; };
+		AC670F7D1E218E3000860E37 /* Route.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Route.hpp; sourceTree = "<group>"; };
+		AC670F7F1E2313CC00860E37 /* Location.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Location.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,15 +75,19 @@
 		AC670F651E2167C400860E37 /* srcXcode */ = {
 			isa = PBXGroup;
 			children = (
+				AC670F7C1E218E3000860E37 /* Route.cpp */,
+				AC670F7D1E218E3000860E37 /* Route.hpp */,
 				AC670F6D1E2167E600860E37 /* Bot.cpp */,
 				AC670F6E1E2167E600860E37 /* Bot.hpp */,
 				AC670F701E21685E00860E37 /* Bug.h */,
 				AC670F711E2168A000860E37 /* Location.h */,
-				AC670F721E2168CB00860E37 /* MyBot.cpp */,
+				AC670F7F1E2313CC00860E37 /* Location.cpp */,
+				AC670F7A1E2181A400860E37 /* Square.cpp */,
 				AC670F751E21697300860E37 /* Square.h */,
 				AC670F761E216A0A00860E37 /* State.cpp */,
 				AC670F771E216A0A00860E37 /* State.hpp */,
 				AC670F791E216A5500860E37 /* Timer.h */,
+				AC670F721E2168CB00860E37 /* MyBot.cpp */,
 				AC670F731E2168CB00860E37 /* MyBot.hpp */,
 			);
 			path = srcXcode;
@@ -138,8 +149,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AC670F7E1E218E3000860E37 /* Route.cpp in Sources */,
+				AC670F7B1E2181A400860E37 /* Square.cpp in Sources */,
 				AC670F741E2168CB00860E37 /* MyBot.cpp in Sources */,
 				AC670F6F1E2167E600860E37 /* Bot.cpp in Sources */,
+				AC670F801E2313CC00860E37 /* Location.cpp in Sources */,
 				AC670F781E216A0A00860E37 /* State.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -257,6 +271,7 @@
 				AC670F6C1E2167C400860E37 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

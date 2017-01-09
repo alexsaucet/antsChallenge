@@ -12,18 +12,19 @@
 #include <fstream>
 
 #ifndef DEBUG
-//#define DEBUG
+#define DEBUG
 #endif
 
-/*
- struct for debugging - this is gross but can be used pretty much like an ofstream,
- except the debug messages are stripped while compiling if
- DEBUG is not defined.
- example:
- Bug bug;
+/**
+ @brief struct for debugging
+ @discussion This is gross but can be used pretty much like an ofstream.
+ @note DEBUG must be defined or messages will not be output to the file
+ @code Bug bug;
+ 
  bug.open("./debug.txt");
- bug << state << endl;
- bug << "testing" << 2.0 << '%' << endl;
+ 
+ bug << "State: " << state << endl;
+ 
  bug.close();
  */
 struct Bug

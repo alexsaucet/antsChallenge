@@ -122,8 +122,30 @@ void State::updateVisionInformation()
  */
 ostream& operator<<(ostream &os, const State &state)
 {
+	// We modified this one to print row and col numbers
+	// Col numbers on top of chart, every 5 col
+	os << "    ";
+	for(int i=0 ; i<state.cols ; i++)
+	{
+		if(i%5 == 0)
+		{
+			if(i < 10)
+				os << i << "    ";
+			else if(i < 100)
+				os << i << "   ";
+			else
+				os << i << "  ";
+		}
+	}
+	os << endl;
 	for(int row=0; row<state.rows; row++)
 	{
+		if(row < 10)
+			os << row << "   ";
+		else if(row < 100)
+			os << row << "  ";
+		else
+			os << row << " ";
 		for(int col=0; col<state.cols; col++)
 		{
 			if(state.grid[row][col].isWater)
@@ -141,6 +163,21 @@ ostream& operator<<(ostream &os, const State &state)
 		}
 		os << endl;
 	}
+	// Col numbers on bottom of chart, every 5 col
+	os << "    ";
+	for(int i=0 ; i<state.cols ; i++)
+	{
+		if(i%5 == 0)
+		{
+			if(i < 10)
+				os << i << "    ";
+			else if(i < 100)
+				os << i << "   ";
+			else
+				os << i << "  ";
+		}
+	}
+	os << endl;
 	
 	return os;
 };

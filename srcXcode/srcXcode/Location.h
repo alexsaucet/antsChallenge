@@ -9,6 +9,11 @@
 #ifndef LOCATION_H_
 #define LOCATION_H_
 
+#define MAX_ROWS 200
+#define MAX_COLS 200
+
+#include <iostream>
+
 /*
  struct for representing locations in the grid.
  */
@@ -26,6 +31,24 @@ struct Location
 		row = r;
 		col = c;
 	};
+	
+	int hashCode() const
+	{
+		return (row*MAX_ROWS*MAX_COLS + col);
+	}
+	
+	friend bool operator==(const Location &l1, const Location &l2)
+	{
+		return ((l1.row == l2.row) && (l1.col == l2.col));
+	}
+	
+	friend bool operator<(const Location &l1, const Location &l2)
+	{
+		return (l1.hashCode() < l2.hashCode());
+	}
 };
+
+std::ostream& operator<<(std::ostream &os, const Location &loc);
+
 
 #endif //LOCATION_H_
