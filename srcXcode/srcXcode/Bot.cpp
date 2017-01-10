@@ -42,6 +42,7 @@ void Bot::makeMoves()
 		if(foodTargets.find(loc) != foodTargets.end())	// Move toward food if this ant has an assigned target
 		{
 			int direction	= calculateDirectionToTarget(loc, foodTargets.at(loc));	// find direction to get to target
+			state.bug << "Direction for ant " << loc << ": " << CDIRECTIONS[i] << endl;
 			Location newLoc	= state.getLocation(loc, direction);	// find location of the tile we're moving to
 			if(!state.grid[newLoc.row][newLoc.col].isWater
 			   && !state.grid[newLoc.row][newLoc.col].isMyAnt()
