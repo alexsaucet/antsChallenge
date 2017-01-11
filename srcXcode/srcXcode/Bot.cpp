@@ -14,11 +14,13 @@ using namespace std;
 
 Bot::Bot()
 {
+	rows = -1;
+	cols = -1;
 	numberOfTurns = 0;
 	totalDecisionTime = 0.0;
 	orders.clear();
-	foodRoutes.clear();
-	foodTargets.clear();
+	foodPaths.clear();
+	assignedFoodTargets.clear();
 };
 
 /**
@@ -27,6 +29,13 @@ Bot::Bot()
  */
 void Bot::makeMoves()
 {
+	// First call: set rows and cols
+	if(rows == -1 && cols == -1)
+	{
+		rows = state.rows;
+		cols = state.cols;
+	}
+	
 	state.bug << "turn " << state.turn << ":" << endl;
 	state.bug << state << endl;	// Display map in text
 	
@@ -39,20 +48,22 @@ void Bot::makeMoves()
 	{
 		Location loc = state.myAnts[i];	// location of current ant
 		
-		if(foodTargets.find(loc) != foodTargets.end())	// Move toward food if this ant has an assigned target
+		if(assignedFoodTargets.find(loc) != assignedFoodTargets.end())	// Move toward food if this ant has an assigned target
 		{
-			int direction	= calculateDirectionToTarget(loc, foodTargets.at(loc));	// find direction to get to target
-			state.bug << "Direction for ant " << loc << ": " << CDIRECTIONS[i] << endl;
-			Location newLoc	= state.getLocation(loc, direction);	// find location of the tile we're moving to
+			Path p = assignedFoodTargets.find(loc)->second;
+			Location newLoc	= state.getLocation(loc, p.direction);	// find location of the tile we're moving to
 			if(!state.grid[newLoc.row][newLoc.col].isWater
 			   && !state.grid[newLoc.row][newLoc.col].isMyAnt()
 			   && !isOrder(newLoc))
 			{
-				state.makeMove(loc, direction);		// Perform move
+				state.makeMove(loc, p.direction);		// Perform move
 				orders.push_back(newLoc);			// Add location to orders
+				state.bug << "-> Ant " << loc << " go to food " << p.end << "; direction: " << p.direction << endl;
 			}
 		}
-		else	// If no assigned target, just go to any free location
+
+		
+		else	// If no assigned target to this ant, just go to any free location
 		{
 			// Get new location for all 4 directions
 			for(int d=0; d<TDIRECTIONS; d++)
@@ -88,16 +99,255 @@ void Bot::makeMoves()
  */
 void Bot::analyzeSituation()
 {
-	orders.clear();
-	foodRoutes.clear();
-	foodTargets.clear();
-	// Get all distances between ants and food
-	calculateFoodRoutes();
-	// Assign food targets from calculated routes
-	assignFoodTargets();
-	state.bug << "ants number : " << (int)state.myAnts.size() << endl;
+	orders.clear();		// Empty the list of orders
+	foodPaths.clear();	// Empty food paths
+	assignedFoodTargets.clear();
+	calculateFoodPaths();
+	assignFoodPaths();
+	
 }
 
+/* For each food tile f:
+		- Calculate the grid of distances to f
+		- If we see an ant a, it will be the closest to f
+			- Save the location of a and f, with the distance and direction a has to take
+			in foodTargets (modify it if necessary)
+		- If no ant is seen, don't do anything
+ */
+void Bot::calculateFoodPaths()
+ {
+	// 2D vector representing the distances from the food tile f
+	 std::vector<std::vector<int> > distances;
+	 // Queue used to store locations to be visited:
+	 std::queue<Location> queue;
+	 // Tmp Location used to store the current food tile location:
+	 Location food;
+	 // Location used to store the location of closest unassigned ant found (or NULL_LOCATION):
+	 Location closestAnt = NULL_LOCATION;
+	 
+	 // For each food tile f currently visible on the map (stop if my ant number is >= number of food path assigned)
+	 for(int f=0 ; f<(int)state.food.size() ; f++)
+	 {
+		 food = state.food[f];
+		 state.bug << "Finding closest ant for food " << food << endl;
+		 // Reset closestAnt to Null:
+		 closestAnt = NULL_LOCATION;
+		 // Reset distances to -1, except 0 for current food tile:
+		 distances = std::vector<std::vector<int> >(rows, std::vector<int>(cols, -1));
+		 distances[food.row][food.col] = 0;
+		 // Empty queue and push food location to it:
+		 queue = std::queue<Location>();
+		 queue.push(food);
+		 // Until queue is empty: pop a from queue, add its neighbours b to queue and update distances
+		 while(!queue.empty())
+		 {
+			 // Get next element in queue and pop it:
+			 Location a = queue.front();
+			 queue.pop();
+			 // It a is an ant, stop; we'll assign this one to this food tile
+			 for(int iAnts=0 ; iAnts<(int)state.myAnts.size() ; iAnts++)
+			 {
+				 if(state.myAnts[iAnts] == a
+					&& !isOrder(a))
+				 {
+					 closestAnt = a;
+					 state.bug << "Found closest ant: "  << closestAnt << endl;
+					 
+					 int directionToFood = findPrevious(distances, closestAnt);
+					 state.bug << "Direction from ant to food: " << directionToFood << endl;
+					 if(directionToFood != -1)	// Valid direction: assign food to ant
+					 {
+						 Path p = Path(closestAnt, food, directionToFood, distances[closestAnt.row][closestAnt.col]);
+						 foodPaths.push_back(p);
+						 state.bug << "creating path ant:" << closestAnt << " food:" << p.end << " direction:" << p.direction << endl;
+					 }
+				 }
+			 }
+			 // Get locations of 4 neighbours; NULL_LOCATION is out of bounds:
+			 Location north, south, east, west;
+			 north	= state.getLocationNoWrap(a, DIR_NORTH);
+			 south	= state.getLocationNoWrap(a, DIR_SOUTH);
+			 east	= state.getLocationNoWrap(a, DIR_EAST);
+			 west	= state.getLocationNoWrap(a, DIR_WEST);
+			 // Add those locations to the queue if they're valid:
+			 if(isValidStepInPath(north)
+				&& distances[north.row][north.col] == -1)
+			 {
+				 queue.push(north);
+				 distances[north.row][north.col] = distances[a.row][a.col] + 1;
+			 }
+			 if(isValidStepInPath(south)
+				&& distances[south.row][south.col] == -1)
+			 {
+				 queue.push(south);
+				 distances[south.row][south.col] = distances[a.row][a.col] + 1;
+			 }
+			 if(isValidStepInPath(east)
+				&& distances[east.row][east.col] == -1)
+			 {
+				 queue.push(east);
+				 distances[east.row][east.col] = distances[a.row][a.col] + 1;
+			 }
+			 if(isValidStepInPath(west)
+				&& distances[west.row][west.col] == -1)
+			 {
+				 queue.push(west);
+				 distances[west.row][west.col] = distances[a.row][a.col] + 1;
+			 }
+		 }
+		 printDistances(distances);
+	 }
+	 // Once we have the path for every (food;ant) couple, we sort the list by ascending distance:
+	 std::sort(foodPaths.begin(), foodPaths.end());
+	 printFoodPaths();
+ }
+
+/* Go through elements of the vector paths and for each path, add it to the food targets if ant and food are not already assigned.
+ Note that the vector paths is sorted in ascending distance, so shortest paths will be assigned first*/
+void Bot::assignFoodPaths()
+{
+	for(int i=0 ; i<(int)foodPaths.size() ; i++)
+	{
+		state.bug << "AAAAAAAA i=" << i << endl;
+		if(assignedFoodTargets.find(foodPaths[i].start) == assignedFoodTargets.end()
+		   && !foodInFoodPaths(foodPaths[i].end))
+		{
+			state.bug << "YES" << endl;
+			assignedFoodTargets.insert(std::make_pair(foodPaths[i].start, foodPaths[i]));
+		}
+	}
+	printAssignedFoodTargets();
+}
+
+bool Bot::foodInFoodPaths(Location loc)
+{
+	std::map<Location, Path>::iterator it;
+	for (it = assignedFoodTargets.begin(); it != assignedFoodTargets.end(); ++it )
+		if (it->second.end == loc)
+			return true;
+	return false;
+}
+
+void Bot::printFoodPaths()
+{
+	state.bug << "FOOD PATHS: " << (int)state.myAnts.size() << " ants ; " << (int)state.food.size() << " foods = " << (int)foodPaths.size() << " paths" << endl;
+	for(int i=0 ; i<(int)foodPaths.size() ; i++)
+	{
+		state.bug << "- Path: Distance: " << foodPaths[i].distance << " - ant" << foodPaths[i].start <<  " food" << foodPaths[i].end << " Direction: " << foodPaths[i].distance << std::endl;
+	}
+}
+
+
+void Bot::printAssignedFoodTargets()
+{
+	std::map<Location, Path>::iterator it;
+	state.bug << "ASSIGNED FOOD PATHS: " << (int)state.myAnts.size() << " ants ; " << (int)state.food.size() << " foods = " << (int)assignedFoodTargets.size() << " targets assigned" << endl;
+	for (it = assignedFoodTargets.begin(); it != assignedFoodTargets.end(); ++it )
+	{
+		state.bug << "--- Target: Distance: " << it->second.distance << " - ant" << it->first << " food" << it->second.end << " direction:" << it->second.direction << std::endl;
+	}
+	
+}
+
+
+
+
+
+void Bot::printDistances(std::vector<std::vector<int> > distances)
+{
+	for(int i=0 ; i<rows ; i++)
+	{
+		for(int j=0 ; j<cols ; j++)
+		{
+			if(distances[i][j] > 100)
+				state.bug << distances[i][j] << " ";
+			else if(distances[i][j] < 0 || distances[i][j] > 10)
+				state.bug << distances[i][j] << "  ";
+			else
+				state.bug << distances[i][j] << "   ";
+		}
+		state.bug << endl;
+	}
+	state.bug << endl;
+}
+
+// Go through foodPath and return true if this ant location is found as a start point of a path
+/*bool Bot::isAntInFoodPaths(Location loc)
+{
+	if(foodPaths.find(loc) != foodPaths.end())
+		return true;
+	return false;
+}*/
+
+int Bot::findPrevious(std::vector<std::vector<int> > distances, Location loc)
+{
+	int currentDistance = distances[loc.row][loc.col];
+	int tmpDist;	// Will store distance at the neighbour locations
+	Location neighbour;
+	
+	neighbour	= state.getLocationNoWrap(loc, DIR_NORTH);	// NORTH
+	if(neighbour != NULL_LOCATION)
+	{
+		tmpDist = distances[neighbour.row][neighbour.col];
+		if(tmpDist < currentDistance && tmpDist != -1)
+			return DIR_NORTH;
+	}
+	
+	neighbour	= state.getLocationNoWrap(loc, DIR_SOUTH);	// SOUTH
+	if(neighbour != NULL_LOCATION)
+	{
+		tmpDist = distances[neighbour.row][neighbour.col];
+		if(tmpDist < currentDistance && tmpDist != -1)
+			return DIR_SOUTH;
+	}
+	
+	neighbour	= state.getLocationNoWrap(loc, DIR_EAST);	// EAST
+	if(neighbour != NULL_LOCATION)
+	{
+		tmpDist = distances[neighbour.row][neighbour.col];
+		if(tmpDist < currentDistance && tmpDist != -1)
+			return DIR_EAST;
+	}
+	
+	neighbour	= state.getLocationNoWrap(loc, DIR_WEST);	// WEST
+	if(neighbour != NULL_LOCATION)
+	{
+		tmpDist = distances[neighbour.row][neighbour.col];
+		if(tmpDist < currentDistance && tmpDist != -1)
+			return DIR_WEST;
+	}
+	
+	return -1;	// If no direction found
+}
+
+
+/* Not valid tile location:
+	- loc == NULL_LOCATION
+	- water: state.grid[row][col].isWater - Can't step on water
+	//false- myAnt: state.grid[row][col].isMyAnt()	- 2 ants on a same tile would die
+	- unvisible tiles:	state.grid[row][col].isVisible - No ant will be in the unvisible space
+ */
+bool Bot::isValidStepInPath(Location loc)
+{
+	if(loc == NULL_LOCATION || isWater(loc) || !isVisible(loc))
+		return false;
+	return true;
+}
+
+bool Bot::isMyAnt(Location loc)
+{
+	return state.grid[loc.row][loc.col].isMyAnt();
+}
+
+bool Bot::isWater(Location loc)
+{
+	return state.grid[loc.row][loc.col].isWater;
+}
+
+bool Bot::isVisible(Location loc)
+{
+	return state.grid[loc.row][loc.col].isVisible;
+}
 
 /** @brief Determines whether a Location is in the list of current orders.
  @discussion Goes through the list of orders currently assigned to our ants, and returns true only if the location is one of the orders.
@@ -112,118 +362,6 @@ void Bot::analyzeSituation()
 	return false;
 }
 
-/** @brief populates the list foodRoutes with routes and orders them from smallest to longest
- @discussion Calculates routes for every (ant;food) couple, and orders the list by ascending distance. This order will make sure only the closest routes are chosen by assignFoodTargets().
- @param
- @return
- */
-void Bot::calculateFoodRoutes()
-{
-	for(int i=0 ; i<(int)state.food.size() ; i++)
-	{
-		for(int j=0 ; j<(int)state.myAnts.size() ; j++)
-		{
-			Route r = Route(state.myAnts[j], state.food[i], state.distance(state.myAnts[j], state.food[i]));
-			foodRoutes.push_back(r);
-		}
-	}
-	
-	std::sort(foodRoutes.begin(), foodRoutes.end());
-	
-	printFoodRoutes();
-}
-
-/** @brief Assigns food targets to ants depending on food routes
- @discussion Reads the list foodRoutes and assign every ant to the closest food. Because foodRoutes is ordered by ascending distance, we only assign ants to the closest food. We also make sure to assign only one ant to each food (and one food to each ant).
- @param
- @return
- */
-void Bot::assignFoodTargets()
-{
-	for(int i=0 ; i<(int)foodRoutes.size() ; i++)
-	{
-		if(foodTargets.find(foodRoutes[i].start) == foodTargets.end()	// if the ant food is not found in map
-		   && !foodInFoodTarget(foodRoutes[i].end))				// and food is not found in map
-		{
-			  foodTargets.insert(std::make_pair(foodRoutes[i].start, foodRoutes[i].end));
-		}
-	}
-	
-	printFoodTargets();
-}
-
-/** @brief Determines whether the position is an ant already assigned to a target
- @discussion Goes through the map foodTargets and returns true only if the given location is found.
- @param loc Location we're looking for in the map foodTargets
- @return Boolean indicating whether the Location has been found
- */
-bool Bot::foodInFoodTarget(Location loc)
-{
-	std::map<Location, Location>::iterator it;
-	for (it = foodTargets.begin(); it != foodTargets.end(); ++it )
-		if (it->second == loc)
-			return true;
-	return false;
-}
-
-/** @brief Print list of food routes for debug
- @discussion Only effective if DEBUG is defined in Bug.h
- @see Bug.h
- */
-void Bot::printFoodRoutes()
-{
-	state.bug << "FOOD ROUTES: " << (int)state.myAnts.size() << " ants ; " << (int)state.food.size() << " foods = " << (int)foodRoutes.size() << " routes" << endl;
-	for(int i=0 ; i<(int)foodRoutes.size() ; i++)
-	{
-		state.bug << "--- Route: Distance: " << foodRoutes[i].distance << " - ant(" << foodRoutes[i].start.row << "," << foodRoutes[i].start.col<< ") food(" << foodRoutes[i].end.row << "," << foodRoutes[i].end.col << ")" << std::endl;
-	}
-}
-
-/** @brief Print food targets assigned to ants
- @discussion Only effective if DEBUG is defined in Bug.h
- @see Bug.h
- */
-void Bot::printFoodTargets()
-{
-	std::map<Location, Location>::iterator it;
-	state.bug << "FOOD TARGETS: " << (int)state.myAnts.size() << " ants ; " << (int)state.food.size() << " foods = " << (int)foodTargets.size() << " targets assigned" << endl;
-	for (it = foodTargets.begin(); it != foodTargets.end(); ++it )
-	{
-		int distance = state.distance(it->first, it->second);
-		state.bug << "--- Target: Distance: " << distance << " - ant" << it->first << " food" << it->second << std::endl;
-	}
-
-}
-
-/** @brief Determines in what direction is the target for the ant
- @discussion Given the Location of an ant and of a target, returns an int (0-3) indicating in what direction we must move the ant to get it closer to the target.
-
- Current implementation:
- 
- - does not take care of obstacles
- 
- - will move the ant NORTH or SOUTH until it is on the same row as the target
- 
- - will then move EAST or WEST until it reaches the target
- 
- @param1 ant	Location of the ant
- @param2 target	Location of the target
- @return Direction as an integer (0-3), or -1 if no direction was found
- @note Direction constants are defined in State.hpp
- */
-int Bot::calculateDirectionToTarget(const Location ant, const Location target)
-{
-	// N - ant.row > target.row
-	if(ant.row > target.row)
-		return DIR_NORTH;
-	if(ant.row < target.row)
-		return DIR_SOUTH;
-	if(ant.col > target.col)
-		return DIR_WEST;
-	if(ant.col < target.col)
-		return DIR_EAST;
-	return -1;	// if no direction is found
-}
 
 
 /* Do not touch following functions */

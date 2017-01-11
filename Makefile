@@ -1,7 +1,7 @@
 CC=g++
 CFLAGS=-O3 -funroll-loops -c
 LDFLAGS=-O2 -lm
-SOURCES=srcXcode/srcXcode/Bot.cpp srcXcode/srcXcode/MyBot.cpp srcXcode/srcXcode/State.cpp srcXcode/srcXcode/Square.cpp srcXcode/srcXcode/Route.cpp srcXcode/srcXcode/Location.cpp
+SOURCES=srcXcode/srcXcode/Bot.cpp srcXcode/srcXcode/MyBot.cpp srcXcode/srcXcode/State.cpp srcXcode/srcXcode/Square.cpp srcXcode/srcXcode/Route.cpp srcXcode/srcXcode/Location.cpp srcXcode/srcXcode/Path.cpp
 OBJECTS=$(addsuffix .o, $(basename ${SOURCES}))
 EXECUTABLE=MyBot
 

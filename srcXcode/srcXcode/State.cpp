@@ -72,6 +72,20 @@ Location State::getLocation(const Location &loc, int direction)
 };
 
 /*
+ returns the new location from moving in a given direction with the edges NOT wrapped
+ Returns NULL_LOCATION if resulting location is out of bounds
+ */
+Location State::getLocationNoWrap(const Location &loc, int direction)
+{
+	if(loc.row + DIRECTIONS[direction][0] > rows-1
+	   || loc.row + DIRECTIONS[direction][0] < 0
+	   || loc.col + DIRECTIONS[direction][1] > cols-1
+	   || loc.col + DIRECTIONS[direction][1] < 0)
+		return NULL_LOCATION;
+	return Location(loc.row + DIRECTIONS[direction][0], loc.col + DIRECTIONS[direction][1]);
+};
+
+/*
  This function will update update the lastSeen value for any squares currently
  visible by one of your live ants.
  

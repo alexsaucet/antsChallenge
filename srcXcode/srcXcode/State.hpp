@@ -75,6 +75,8 @@ struct State
 	
 	double distance(const Location &loc1, const Location &loc2);
 	Location getLocation(const Location &startLoc, int direction);
+	Location getLocationNoWrap(const Location &loc, int direction);
+
 	
 	void updateVisionInformation();
 };
