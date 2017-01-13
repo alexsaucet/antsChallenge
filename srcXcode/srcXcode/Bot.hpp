@@ -45,6 +45,7 @@ struct Bot
 	
 	void calculateFoodPaths();	// Calculate foodPaths between food and ant
 	void assignFoodPaths();		// Assigned food targets to ants depending on food routes
+	void assignFoodOrders();	// Effectively moves ant to their assigned food target
 	
 	bool isOrder(Location loc);				// determines whether a location is in the orders
 	bool isMyAnt(Location loc);

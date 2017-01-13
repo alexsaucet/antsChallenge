@@ -42,28 +42,16 @@ void Bot::makeMoves()
 	numberOfTurns++;
 	
 	analyzeSituation();		// Calculates targets
+	
+	assignFoodOrders();		// Assigns ants to food, from the assignedFoodTarget map
 
 	//picks out moves for each ant
 	for(int i=0; i<(int)state.myAnts.size(); i++)
 	{
 		Location loc = state.myAnts[i];	// location of current ant
 		
-		if(assignedFoodTargets.find(loc) != assignedFoodTargets.end())	// Move toward food if this ant has an assigned target
-		{
-			Path p = assignedFoodTargets.find(loc)->second;
-			Location newLoc	= state.getLocation(loc, p.direction);	// find location of the tile we're moving to
-			if(!state.grid[newLoc.row][newLoc.col].isWater
-			   && !state.grid[newLoc.row][newLoc.col].isMyAnt()
-			   && !isOrder(newLoc))
-			{
-				state.makeMove(loc, p.direction);		// Perform move
-				orders.push_back(newLoc);			// Add location to orders
-				state.bug << "-> Ant " << loc << " go to food " << p.end << "; direction: " << p.direction << endl;
-			}
-		}
-
-		
-		else	// If no assigned target to this ant, just go to any free location
+		// If the ant has no assigned food target, explore randomly:
+		if(assignedFoodTargets.find(loc) == assignedFoodTargets.end())	// If no assigned target to this ant, just go to any free location
 		{
 			// Get new location for all 4 directions
 			for(int d=0; d<TDIRECTIONS; d++)
@@ -105,6 +93,33 @@ void Bot::analyzeSituation()
 	calculateFoodPaths();
 	assignFoodPaths();
 	
+	
+}
+
+/* For each myAnt on the map:
+	- Check if the ant has an assigned food target
+	- If yes, then we find if it can move in the direction that gets it closer to the food
+		- If it can, we make the move
+ */
+void Bot::assignFoodOrders()
+{
+	for(int i=0; i<(int)state.myAnts.size(); i++)
+	{
+		Location loc = state.myAnts[i];	// location of current ant
+		
+		if(assignedFoodTargets.find(loc) != assignedFoodTargets.end())	// Move toward food if this ant has an assigned target
+		{
+			Path p = assignedFoodTargets.find(loc)->second;
+			Location newLoc	= state.getLocation(loc, p.direction);	// find location of the tile we're moving to
+			if(!state.grid[newLoc.row][newLoc.col].isWater
+			   && !state.grid[newLoc.row][newLoc.col].isMyAnt()
+			   && !isOrder(newLoc))
+			{
+				state.makeMove(loc, p.direction);		// Perform move
+				orders.push_back(newLoc);			// Add location to orders
+			}
+		}
+	}
 }
 
 /* For each food tile f:
@@ -129,7 +144,6 @@ void Bot::calculateFoodPaths()
 	 for(int f=0 ; f<(int)state.food.size() ; f++)
 	 {
 		 food = state.food[f];
-		 state.bug << "Finding closest ant for food " << food << endl;
 		 // Reset closestAnt to Null:
 		 closestAnt = NULL_LOCATION;
 		 // Reset distances to -1, except 0 for current food tile:
@@ -151,15 +165,12 @@ void Bot::calculateFoodPaths()
 					&& !isOrder(a))
 				 {
 					 closestAnt = a;
-					 state.bug << "Found closest ant: "  << closestAnt << endl;
 					 
 					 int directionToFood = findPrevious(distances, closestAnt);
-					 state.bug << "Direction from ant to food: " << directionToFood << endl;
 					 if(directionToFood != -1)	// Valid direction: assign food to ant
 					 {
 						 Path p = Path(closestAnt, food, directionToFood, distances[closestAnt.row][closestAnt.col]);
 						 foodPaths.push_back(p);
-						 state.bug << "creating path ant:" << closestAnt << " food:" << p.end << " direction:" << p.direction << endl;
 					 }
 				 }
 			 }
@@ -195,7 +206,6 @@ void Bot::calculateFoodPaths()
 				 distances[west.row][west.col] = distances[a.row][a.col] + 1;
 			 }
 		 }
-		 printDistances(distances);
 	 }
 	 // Once we have the path for every (food;ant) couple, we sort the list by ascending distance:
 	 std::sort(foodPaths.begin(), foodPaths.end());
@@ -208,11 +218,9 @@ void Bot::assignFoodPaths()
 {
 	for(int i=0 ; i<(int)foodPaths.size() ; i++)
 	{
-		state.bug << "AAAAAAAA i=" << i << endl;
 		if(assignedFoodTargets.find(foodPaths[i].start) == assignedFoodTargets.end()
 		   && !foodInFoodPaths(foodPaths[i].end))
 		{
-			state.bug << "YES" << endl;
 			assignedFoodTargets.insert(std::make_pair(foodPaths[i].start, foodPaths[i]));
 		}
 	}
