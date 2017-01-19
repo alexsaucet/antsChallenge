@@ -15,3 +15,6 @@ std::ostream& operator<<(std::ostream &os, const Location &loc)
 	
 	return os;
 };
+
+
+

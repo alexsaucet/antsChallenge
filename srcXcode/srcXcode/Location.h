@@ -14,6 +14,8 @@
 
 #include <iostream>
 
+#define NULL_LOCATION Location(-1,-1)
+
 /*
  struct for representing locations in the grid.
  */
@@ -31,7 +33,7 @@ struct Location
 		row = r;
 		col = c;
 	};
-	
+		
 	int hashCode() const
 	{
 		return (row*MAX_ROWS*MAX_COLS + col);
@@ -40,6 +42,11 @@ struct Location
 	friend bool operator==(const Location &l1, const Location &l2)
 	{
 		return ((l1.row == l2.row) && (l1.col == l2.col));
+	}
+	
+	friend bool operator!=(const Location &l1, const Location &l2)
+	{
+		return !(l1 == l2);
 	}
 	
 	friend bool operator<(const Location &l1, const Location &l2)
