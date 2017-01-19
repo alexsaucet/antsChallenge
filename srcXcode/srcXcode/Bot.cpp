@@ -21,6 +21,9 @@ Bot::Bot()
 	orders.clear();
 	foodPaths.clear();
 	assignedFoodTargets.clear();
+	unexploredLocations.clear();
+	assignedUnexploredTargets.clear();
+	exploredGrid.clear();
 };
 
 /**
@@ -29,11 +32,16 @@ Bot::Bot()
  */
 void Bot::makeMoves()
 {
-	// First call: set rows and cols
+	// First call: set rows and cols, and initially add every location to the set of unexplored locations
+	// Also, initially set every location of the explored grid to a '.' square (accessible)
 	if(rows == -1 && cols == -1)
 	{
 		rows = state.rows;
 		cols = state.cols;
+		for(int i=0 ; i<rows ; i++)
+			for(int j=0 ; j<cols ; j++)
+				unexploredLocations.insert(Location(i,j));
+		initExploredGrid();
 	}
 	
 	state.bug << "turn " << state.turn << ":" << endl;
@@ -41,9 +49,12 @@ void Bot::makeMoves()
 	
 	numberOfTurns++;
 	
+	updateExploredGrid();	// update the explored grid
+	
 	analyzeSituation();		// Calculates targets
 	
-	assignFoodOrders();		// Assigns ants to food, from the assignedFoodTarget map
+	moveAntsToFoodOrders();			// Assigns ants to food, from the assignedFoodTarget map
+	moveAntsToUnexploredOrders();	// Assigns ants to unexplored locations, from the assignedUnexploredTarget map
 
 	//picks out moves for each ant
 	for(int i=0; i<(int)state.myAnts.size(); i++)
@@ -51,14 +62,15 @@ void Bot::makeMoves()
 		Location loc = state.myAnts[i];	// location of current ant
 		
 		// If the ant has no assigned food target, explore randomly:
-		if(assignedFoodTargets.find(loc) == assignedFoodTargets.end())	// If no assigned target to this ant, just go to any free location
+		if(assignedFoodTargets.find(loc) == assignedFoodTargets.end()
+		   && assignedUnexploredTargets.find(loc) == assignedUnexploredTargets.end())	// If no assigned target to this ant, just go to any free location
 		{
 			// Get new location for all 4 directions
 			for(int d=0; d<TDIRECTIONS; d++)
 			{
 				loc = state.getLocation(state.myAnts[i], d);
 				// Move to direction if it's safe
-				if(!state.grid[loc.row][loc.col].isWater
+				if(!isWater(Location(loc.row,loc.col))
 				   && !state.grid[loc.row][loc.col].isMyAnt()
 				   && !isOrder(loc))
 				{
@@ -75,7 +87,23 @@ void Bot::makeMoves()
 	totalDecisionTime += timeTaken;
 	state.bug << "time taken: " << timeTaken << "ms" << endl;
 	state.bug << "average decision time so far: " << (totalDecisionTime/numberOfTurns) << "ms" << endl << endl;
-};
+}
+
+bool Bot::hasAntAssignedFoodTarget(Location loc)
+{
+	return (assignedFoodTargets.find(loc) != assignedFoodTargets.end());
+}
+
+/*
+ Initialize the explored grid to all visible accessible squares. It will then be updated at every turn to add the walls (water). Other elements are not tracked here as they move during the game.
+ */
+void Bot::initExploredGrid()
+{
+	exploredGrid = std::vector<std::vector<Square> >(rows, vector<Square>(cols, Square()));
+	for(int i=0 ; i<rows ; i++)
+		for(int j=0 ; j<cols ; j++)
+			exploredGrid[i][j].isVisible = 1;
+}
 
 /** @brief Assign targets to ants depending on the situation.
  @discussion Currently, it will assign food targets to the ants.
@@ -90,18 +118,229 @@ void Bot::analyzeSituation()
 	orders.clear();		// Empty the list of orders
 	foodPaths.clear();	// Empty food paths
 	assignedFoodTargets.clear();
+	assignedUnexploredTargets.clear();
 	calculateFoodPaths();
 	assignFoodPaths();
-	
-	
+	for(int i=0 ; i<state.myAnts.size() ; i++)
+		if(!hasAntAssignedFoodTarget(state.myAnts[i]))
+			calculateClosestUnexplored(state.myAnts[i]);
+	printAssignedFoodTargets();
+	printAssignedUnexploredPaths();
 }
+
+/* Every turn, add newly discovered water locations to the grid of explored locations.
+ Also, remove newly discovered locations from the unexploredLocations set. */
+void Bot::updateExploredGrid()
+{
+	for(int i=0 ; i<rows ; i++)
+	{
+		for(int j=0 ; j<cols ; j++)
+		{
+			if(state.grid[i][j].isWater)
+				exploredGrid[i][j].isWater = 1;
+			if(state.grid[i][j].isVisible)
+				unexploredLocations.erase(Location(i,j));
+		}
+	}
+	
+	printExploredGrid();
+}
+
+void Bot::printExploredGrid()
+{
+	state.bug << "    ";
+	for(int i=0 ; i<cols ; i++)
+	{
+		if(i%5 == 0)
+		{
+			if(i < 10)
+				state.bug << i << "    ";
+			else if(i < 100)
+				state.bug << i << "   ";
+			else
+				state.bug << i << "  ";
+		}
+	}
+	state.bug << endl;
+	for(int row=0; row<rows; row++)
+	{
+		if(row < 10)
+			state.bug << row << "   ";
+		else if(row < 100)
+			state.bug << row << "  ";
+		else
+			state.bug << row << " ";
+		for(int col=0; col<state.cols; col++)
+		{
+			if(exploredGrid[row][col].isWater)
+				state.bug << '%';
+			else if(exploredGrid[row][col].isFood)
+				state.bug << '*';
+			else if(exploredGrid[row][col].isHill)
+				state.bug << (char)('A' + state.grid[row][col].hillPlayer);
+			else if(exploredGrid[row][col].ant >= 0)
+				state.bug << (char)('a' + state.grid[row][col].ant);
+			else if(exploredGrid[row][col].isVisible)
+				state.bug << '.';
+			else
+				state.bug << '?';
+		}
+		state.bug << endl;
+	}
+	// Col numbers on bottom of chart, every 5 col
+	state.bug << "    ";
+	for(int i=0 ; i<state.cols ; i++)
+	{
+		if(i%5 == 0)
+		{
+			if(i < 10)
+				state.bug << i << "    ";
+			else if(i < 100)
+				state.bug << i << "   ";
+			else
+				state.bug << i << "  ";
+		}
+	}
+	state.bug << endl;
+}
+
+
+
+
+
+
+
+/* Finds the closest unexplored Location for the given ant.
+ For each ant a with no assigned target:
+	- Calculate the approximate distance to unexplored locations (state.distance()).
+	- Pick the closest location l to this ant
+	- BFS algorithm from the unexplored location l to the ant a => find the path but this time we care about water
+	- from the ant a, pick the direction getting it closer to the objective location
+ - When we have the path, add the <ant, Path> to the assignedUnexploredTarget map
+ 
+ */
+void Bot::calculateClosestUnexplored(Location ant)
+{
+	int maxDistance = 100;
+	// 2D vector representing the distances from the unexplored location l
+	std::vector<std::vector<int> > distances;
+	// Queue used to store locations to be visited:
+	std::queue<Location> queue;
+	// Target: closest unexplored location:
+	Location target = NULL_LOCATION;
+
+	// If ant already has an assigned food target, skip it:
+	if(!hasAntAssignedFoodTarget(ant))
+	{
+		int minDistance = UINT16_MAX;
+		// Find closest unexplored location from this ant (basic state.distance() distance):
+		for(std::set<Location>::iterator it = unexploredLocations.begin() ; it!=unexploredLocations.end() ; ++it)
+		{
+			int dist = state.distance(ant, *it);
+			if(dist < minDistance && !locationInUnexploredPaths(*it))
+			{
+				minDistance = dist;
+				target = *it;
+			}
+		}
+		if(target != NULL_LOCATION)	// BFS from target to ant to find shortest path
+		{
+			// Reset distances to -1, except 0 for current food tile:
+			distances = std::vector<std::vector<int> >(rows, std::vector<int>(cols, -1));
+			distances[target.row][target.col] = 0;
+			// Empty queue and push food location to it:
+			queue = std::queue<Location>();
+			queue.push(target);
+			// Until queue is empty: pop a from queue, add its neighbours b to queue and update distances
+			while(!queue.empty())
+			{
+				// Get next element in queue and pop it:
+				Location a = queue.front();
+				queue.pop();
+				// If the distance of current location to objective >= maxDistance, break;
+				if(distances[a.row][a.col] >= maxDistance)
+					break;
+				// If current location a is the ant we're looking for (ant), stop
+				if(a == ant && findPrevious(distances, a) != -1)
+				{
+					Path p = Path(a, target, findPrevious(distances, a), distances[a.row][a.col]);
+					assignedUnexploredTargets.insert(std::make_pair(ant, p));
+				}
+				else
+				{
+					// Get locations of 4 neighbours; NULL_LOCATION is out of bounds:
+					Location north, south, east, west;
+					north	= state.getLocationNoWrap(a, DIR_NORTH);
+					south	= state.getLocationNoWrap(a, DIR_SOUTH);
+					east	= state.getLocationNoWrap(a, DIR_EAST);
+					west	= state.getLocationNoWrap(a, DIR_WEST);
+					// Add those locations to the queue if they're valid:
+					if(isValidStepInPath(north)
+					   && distances[north.row][north.col] == -1)
+					{
+						queue.push(north);
+						distances[north.row][north.col] = distances[a.row][a.col] + 1;
+					}
+					if(isValidStepInPath(south)
+					   && distances[south.row][south.col] == -1)
+					{
+						queue.push(south);
+						distances[south.row][south.col] = distances[a.row][a.col] + 1;
+					}
+					if(isValidStepInPath(east)
+					   && distances[east.row][east.col] == -1)
+					{
+						queue.push(east);
+						distances[east.row][east.col] = distances[a.row][a.col] + 1;
+					}
+					if(isValidStepInPath(west)
+					   && distances[west.row][west.col] == -1)
+					{
+						queue.push(west);
+						distances[west.row][west.col] = distances[a.row][a.col] + 1;
+					}
+				}
+			}
+		}
+	}
+}
+
+
+
+
+/* For each myAnt on the map:
+	- Check if the ant has an assigned unexplored target
+	- If yes, then we find if it can move in the direction that gets it closer to the unexplored location
+ - If it can, we make the move
+ */
+void Bot::moveAntsToUnexploredOrders()
+{
+	for(int i=0; i<(int)state.myAnts.size(); i++)
+	{
+		Location loc = state.myAnts[i];	// location of current ant
+		
+		if(assignedUnexploredTargets.find(loc) != assignedUnexploredTargets.end())	// Move toward food if this ant has an assigned target
+		{
+			Path p = assignedUnexploredTargets.find(loc)->second;
+			Location newLoc	= state.getLocation(loc, p.direction);	// find location of the tile we're moving to
+			if(!isWater(Location(newLoc.row, newLoc.col))
+			   && !isMyAnt(Location(newLoc.row, newLoc.col))
+			   && !isOrder(newLoc))
+			{
+				state.makeMove(loc, p.direction);		// Perform move
+				orders.push_back(newLoc);			// Add location to orders
+			}
+		}
+	}
+}
+
 
 /* For each myAnt on the map:
 	- Check if the ant has an assigned food target
 	- If yes, then we find if it can move in the direction that gets it closer to the food
 		- If it can, we make the move
  */
-void Bot::assignFoodOrders()
+void Bot::moveAntsToFoodOrders()
 {
 	for(int i=0; i<(int)state.myAnts.size(); i++)
 	{
@@ -111,8 +350,8 @@ void Bot::assignFoodOrders()
 		{
 			Path p = assignedFoodTargets.find(loc)->second;
 			Location newLoc	= state.getLocation(loc, p.direction);	// find location of the tile we're moving to
-			if(!state.grid[newLoc.row][newLoc.col].isWater
-			   && !state.grid[newLoc.row][newLoc.col].isMyAnt()
+			if(!isWater(Location(newLoc.row, newLoc.col))
+			   && !isMyAnt(Location(newLoc.row, newLoc.col))
 			   && !isOrder(newLoc))
 			{
 				state.makeMove(loc, p.direction);		// Perform move
@@ -128,24 +367,21 @@ void Bot::assignFoodOrders()
 			- Save the location of a and f, with the distance and direction a has to take
 			in foodTargets (modify it if necessary)
 		- If no ant is seen, don't do anything
+ Note: limits range to 50 moves not to take too much time
  */
 void Bot::calculateFoodPaths()
  {
-	// 2D vector representing the distances from the food tile f
+	 const int maxDistance = 50;
+	 // 2D vector representing the distances from the food tile f
 	 std::vector<std::vector<int> > distances;
 	 // Queue used to store locations to be visited:
 	 std::queue<Location> queue;
 	 // Tmp Location used to store the current food tile location:
 	 Location food;
-	 // Location used to store the location of closest unassigned ant found (or NULL_LOCATION):
-	 Location closestAnt = NULL_LOCATION;
-	 
 	 // For each food tile f currently visible on the map (stop if my ant number is >= number of food path assigned)
 	 for(int f=0 ; f<(int)state.food.size() ; f++)
 	 {
 		 food = state.food[f];
-		 // Reset closestAnt to Null:
-		 closestAnt = NULL_LOCATION;
 		 // Reset distances to -1, except 0 for current food tile:
 		 distances = std::vector<std::vector<int> >(rows, std::vector<int>(cols, -1));
 		 distances[food.row][food.col] = 0;
@@ -158,18 +394,19 @@ void Bot::calculateFoodPaths()
 			 // Get next element in queue and pop it:
 			 Location a = queue.front();
 			 queue.pop();
+			 // If the distance of current location to objective >= maxDistance, break;
+			 if(distances[a.row][a.col] >= maxDistance)
+				 break;
 			 // It a is an ant, stop; we'll assign this one to this food tile
 			 for(int iAnts=0 ; iAnts<(int)state.myAnts.size() ; iAnts++)
 			 {
 				 if(state.myAnts[iAnts] == a
 					&& !isOrder(a))
 				 {
-					 closestAnt = a;
-					 
-					 int directionToFood = findPrevious(distances, closestAnt);
+					 int directionToFood = findPrevious(distances, a);
 					 if(directionToFood != -1)	// Valid direction: assign food to ant
 					 {
-						 Path p = Path(closestAnt, food, directionToFood, distances[closestAnt.row][closestAnt.col]);
+						 Path p = Path(a, food, directionToFood, distances[a.row][a.col]);
 						 foodPaths.push_back(p);
 					 }
 				 }
@@ -209,7 +446,6 @@ void Bot::calculateFoodPaths()
 	 }
 	 // Once we have the path for every (food;ant) couple, we sort the list by ascending distance:
 	 std::sort(foodPaths.begin(), foodPaths.end());
-	 printFoodPaths();
  }
 
 /* Go through elements of the vector paths and for each path, add it to the food targets if ant and food are not already assigned.
@@ -224,7 +460,15 @@ void Bot::assignFoodPaths()
 			assignedFoodTargets.insert(std::make_pair(foodPaths[i].start, foodPaths[i]));
 		}
 	}
-	printAssignedFoodTargets();
+}
+
+bool Bot::locationInUnexploredPaths(Location loc)
+{
+	std::map<Location, Path>::iterator it;
+	for (it = assignedUnexploredTargets.begin(); it != assignedUnexploredTargets.end(); ++it )
+		if (it->second.end == loc)
+			return true;
+	return false;
 }
 
 bool Bot::foodInFoodPaths(Location loc)
@@ -241,7 +485,7 @@ void Bot::printFoodPaths()
 	state.bug << "FOOD PATHS: " << (int)state.myAnts.size() << " ants ; " << (int)state.food.size() << " foods = " << (int)foodPaths.size() << " paths" << endl;
 	for(int i=0 ; i<(int)foodPaths.size() ; i++)
 	{
-		state.bug << "- Path: Distance: " << foodPaths[i].distance << " - ant" << foodPaths[i].start <<  " food" << foodPaths[i].end << " Direction: " << foodPaths[i].distance << std::endl;
+		state.bug << "- Path: Distance: " << foodPaths[i].distance << " - ant" << foodPaths[i].start <<  " food" << foodPaths[i].end << " Direction: " << foodPaths[i].direction << std::endl;
 	}
 }
 
@@ -259,6 +503,16 @@ void Bot::printAssignedFoodTargets()
 
 
 
+void Bot::printAssignedUnexploredPaths()
+{
+	std::map<Location, Path>::iterator it;
+	state.bug << "ASSIGNED UNEXPLORED PATHS: " << (int)assignedUnexploredTargets.size() << " targets assigned" << endl;
+	for (it = assignedUnexploredTargets.begin(); it != assignedUnexploredTargets.end(); ++it )
+	{
+		state.bug << "--- Target: Distance: " << it->second.distance << " - ant" << it->first << " unexplored" << it->second.end << " direction:" << it->second.direction << std::endl;
+	}
+	
+}
 
 
 void Bot::printDistances(std::vector<std::vector<int> > distances)
@@ -333,11 +587,12 @@ int Bot::findPrevious(std::vector<std::vector<int> > distances, Location loc)
 	- loc == NULL_LOCATION
 	- water: state.grid[row][col].isWater - Can't step on water
 	//false- myAnt: state.grid[row][col].isMyAnt()	- 2 ants on a same tile would die
-	- unvisible tiles:	state.grid[row][col].isVisible - No ant will be in the unvisible space
+	//deleter- unvisible tiles:	state.grid[row][col].isVisible - No ant will be in the unvisible space
+ First version didn't consider invisible tiles as valid. Changed this and now consider that invisible space is all accessible space (in the invisible space, the exploredGrid is the grid taken into consideration). Note that the function calculateFoodPaths() now has a limit of distance it will explore to try and find the paths, or it could potentially take a very long time on huge maps.
  */
 bool Bot::isValidStepInPath(Location loc)
 {
-	if(loc == NULL_LOCATION || isWater(loc) || !isVisible(loc))
+	if(loc == NULL_LOCATION || isWater(loc))
 		return false;
 	return true;
 }
@@ -349,7 +604,7 @@ bool Bot::isMyAnt(Location loc)
 
 bool Bot::isWater(Location loc)
 {
-	return state.grid[loc.row][loc.col].isWater;
+	return exploredGrid[loc.row][loc.col].isWater;
 }
 
 bool Bot::isVisible(Location loc)
